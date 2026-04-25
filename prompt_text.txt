@@ -1,0 +1,317 @@
+🎸 Fret Forge
+Android App – Full Development Prompt
+Version 1.0  |  April 2026
+Prepared for AI-assisted development (e.g. Anti-Gravity / Claude Code)
+1. Project Overview
+Build a native Android application in Kotlin using Jetpack Compose for UI, named "Fret Forge". The app helps guitarists organise and run structured practice sessions with a metronome, stopwatch, and visual task guidance. The app must work fully offline, support portrait orientation only, and target API 26 (Android 8.0) minimum.
+Component
+Technology
+Language
+Kotlin
+UI Framework
+Jetpack Compose (Material Design 3, dark theme)
+Audio
+SoundPool (low-latency metronome clicks)
+State Management
+ViewModel + StateFlow
+Local Data
+Room Database + assets/tasks.json seed file
+Navigation
+Jetpack Navigation Compose (Bottom Nav + Back Stack)
+Timing
+SystemClock.elapsedRealtime() in Coroutine (drift-compensated)
+Preferences
+SharedPreferences (BPM memory, last-used tasks)
+Min SDK
+API 26 (Android 8.0)
+Screen
+Portrait only, FLAG_KEEP_SCREEN_ON on Practice screen
+2. Navigation Architecture
+The app uses Jetpack Navigation Compose with a persistent Bottom Navigation Bar visible on all main screens. The Practice screen hides the bottom bar (full-screen focus mode) but provides its own back/end controls.
+2.1 Bottom Navigation Bar
+The bottom bar contains four destinations:
+Icon
+Label
+Route
+Notes
+🏠
+Home
+home
+Task selection – default start screen
+📋
+Groups
+groups
+Saved practice groups
+📜
+History
+history
+All past practice sessions
+⚙️
+Settings
+settings
+App preferences (optional)
+2.2 Navigation Flow
+Home (Task Selection) → tapping "Create Group" → Group Review screen (back stack, back arrow returns to Home)
+Group Review → tapping "Start Practice" → Practice screen (full-screen, bottom bar hidden)
+Practice screen → tapping "End" → Summary screen → "Done" returns to Home (back stack cleared)
+Bottom bar tabs are always accessible from Home, Groups, History, and Settings
+Back button on Group Review discards unsaved changes with a confirmation dialog
+2.3 Implementation Hint
+// NavHost setup
+NavHost(navController, startDestination = "home") {
+    composable("home") { TaskLibraryScreen(navController) }
+    composable("groups") { GroupsScreen(navController) }
+    composable("history") { HistoryScreen(navController) }
+    composable("group_review/{taskIds}") { GroupReviewScreen(navController, ...) }
+    composable("practice/{groupId}") { PracticeScreen(navController, ...) }
+    composable("summary/{sessionId}") { SummaryScreen(navController, ...) }
+}
+// Hide bottom bar on Practice screen
+val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+val showBottomBar = currentRoute !in listOf("practice/{groupId}", "summary/{sessionId}")
+3. Task Data Structure & Seeding
+3.1 Data Model
+@Entity
+data class PracticeTask(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    val description: String,
+    val category: String,
+    val isParent: Boolean,
+    val parentId: Int?,       // null = this IS a parent
+    val imageFile: String?    // filename in assets/images/
+)
+Rules:
+A parent task has isParent = true and parentId = null
+A child task has isParent = false and parentId pointing to its parent's ID
+Only child tasks can be added to practice groups and selected for practice
+Parent tasks act as collapsible section headers – they are not selectable
+If a parent has no children it behaves as a standalone selectable task
+3.2 JSON Seed File
+Create the file at: app/src/main/assets/tasks.json
+[
+  {
+    "id": 1, "name": "Chromatics", "description": "Chromatic exercises",
+    "category": "Technique", "isParent": true, "parentId": null, "imageFile": null
+  },
+  {
+    "id": 2, "name": "2nd Finger Position", "description": "C Major Scale starting with 2nd Finger",
+    "category": "Technique", "isParent": true, "parentId": null,"imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 3, "name": "Triplets", "description": "Triplets in 2nd Finger Position",
+    "category": "Technique", "isParent": true, "parentId": 2,"imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 4, "name": "Quadraplets", "description": "Quadraplets in 2nd Finger Position",
+    "category": "Chords", "isParent": false, "parentId": 2, "imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 5, "name": "Chords", "description": "Chords Practice",
+    "category": "Chords", "isParent": true, "parentId": null, "imageFile": "chords.png"
+  }
+]
+Place all task images at: app/src/main/assets/images/
+3.3 Database Seeding on First Launch
+// In Application.onCreate() or via RoomDatabase.Callback
+val json = context.assets.open("tasks.json").bufferedReader().readText()
+val tasks = Gson().fromJson(json, Array<PracticeTask>::class.java)
+database.practiceTaskDao().insertAll(tasks.toList())
+// Guard: only seed if table is empty
+if (database.practiceTaskDao().count() == 0) { /* seed */ }
+4. Screen 1 – Task Library (Home)
+This is the default home screen and the starting point of every session. It pre-selects tasks based on the last practice session automatically.
+4.1 UI Components
+Search bar at the top to filter tasks by name or category
+Expandable list of parent tasks (LazyColumn)
+Each parent row shows: bold task name, expand/collapse chevron, selected-child count badge (e.g. "2 selected")
+On expansion: child tasks appear indented with a small image thumbnail (~40dp), task name, and a checkbox
+A banner at the top of the list (dismissable): "Restored from your last session"
+FAB button "Create Group" – enabled only when at least one child task is selected
+4.2 Expandable List – Compose Hint
+val expandedParents = remember { mutableStateMapOf<Int, Boolean>() }
+ParentTaskRow(
+    task = parent,
+    isExpanded = expandedParents[parent.id] == true,
+    selectedChildCount = selectedIds.count { it in childIds },
+    onToggle = { expandedParents[parent.id] = !(expandedParents[parent.id] ?: false) }
+)
+if (expandedParents[parent.id] == true) {
+    children.forEach { child ->
+        ChildTaskRow(
+            task = child,
+            isSelected = child.id in selectedIds,
+            onSelect = { viewModel.toggleSelection(child.id) }
+        )
+    }
+}
+4.3 Last-Used Task Restoration
+On app launch read SharedPreferences key last_used_task_ids (comma-separated task ID string)
+Pre-check all matching child tasks in the ViewModel before rendering
+Show the dismissable "Restored from your last session" banner
+If no previous session exists all tasks appear unchecked
+// Save on session end
+prefs.edit()
+    .putString("last_used_task_ids", tasks.joinToString(",") { it.id.toString() })
+    .apply()
+// Restore on launch
+val lastIds = prefs.getString("last_used_task_ids", "")
+    ?.split(",")?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
+5. Screen 2 – Group Review
+Accessed from the Home screen after tapping "Create Group". Also accessible from the Groups tab to view/edit saved groups.
+5.1 UI Components
+Text field to name the group (e.g. "Morning Warm-Up")
+Draggable list of selected tasks – user can reorder them
+"Start Practice" button at the bottom
+Back arrow in top app bar – prompts confirmation dialog if unsaved changes exist
+5.2 Behaviour
+Task order in this screen defines the sequence during the practice session
+Tapping "Start Practice" navigates to the Practice screen starting at Task 1
+Groups can be saved and reused from the Groups tab
+6. Screen 3 – Practice Screen
+Full-screen mode. Bottom navigation bar is hidden. The screen is divided into three vertical sections.
+  TOP SECTION – Task Display  
+Large bold text: current task name
+Image view: reference image for the task (chord diagram, scale diagram etc.)
+Small progress indicator: "Task X of Y"
+  MIDDLE SECTION – Metronome  
+4 beat dots displayed horizontally, evenly spaced
+Each dot is tappable and cycles through three states:
+Normal – plays a standard click sound
+Accentuated – plays a louder or higher-pitched click sound (dot visually highlighted)
+Muted – plays no sound (dot visually dimmed)
+Each dot pulses / scales up on its beat tick
+BPM control: slider and +/– buttons (range 20–240 BPM), current BPM shown as "♩ = 80 BPM"
+Play / Stop toggle button for the metronome
+On loading a task the BPM restores from SharedPreferences key bpm_task_{taskId}, defaulting to 60 if not found
+On task transition (Next button) the metronome stops regardless; user must consciously restart it at the restored BPM
+Implementation notes:
+Use SoundPool for low-latency audio with two samples: click_normal.wav and click_accent.wav
+Use SystemClock.elapsedRealtime() in a Coroutine for drift-compensated timing (do not use Thread.sleep or delay() alone)
+Debounce BPM saves by ~500 ms to avoid excessive SharedPreferences writes
+// Persist BPM per task
+prefs.edit().putInt("bpm_task_${task.id}", currentBpm).apply()
+// Restore BPM when task loads
+val bpm = prefs.getInt("bpm_task_${task.id}", 60)
+  BOTTOM SECTION – Stopwatch & Controls  
+Current task time – very large font (48–56sp), format MM:SS, label "This Task"
+Total session time – medium font below, format MM:SS, label "Total Session"
+NEXT button – advances to the next task
+END button – ends the session and navigates to the Summary screen
+NEXT button behaviour:
+Current task stopwatch resets to 00:00 and restarts
+Total session stopwatch continues uninterrupted
+Task display updates to next task (name + image)
+Metronome stops and BPM resets to the next task's saved value
+If it was the last task the NEXT button is disabled
+END button behaviour:
+Both timers stop
+Session data (including per-task BPM) is written to Room DB
+Navigates to Summary screen
+7. Screen 4 – Summary Screen
+List of all tasks completed with time spent on each task and the BPM used
+Total session duration
+"Done" button – clears the back stack and returns to Home
+Data is already persisted by the time the user reaches this screen
+8. Screen 5 – Practice History
+Accessible via the History tab in the bottom navigation bar.
+8.1 UI Components
+Scrollable list of past sessions, sorted by most recent first
+Each session entry is an expandable card showing:
+Date and time of session (e.g. "Mon, 21 Apr 2026 – 7:30 AM")
+Total session duration (e.g. "Total: 32:45")
+On expansion: sub-list of each task with time spent and BPM used (e.g. "C Major Scale – 05:20 @ 80 BPM")
+Tasks listed in the order they were practiced
+Optional filter/search bar to look up sessions by date range or task name
+Empty state message: "No practice sessions yet. Start practicing!"
+Long-press on a session card shows a delete option (with confirmation dialog)
+8.2 Data Model
+@Entity
+data class PracticeSession(
+    @PrimaryKey(autoGenerate = true) val sessionId: Long = 0,
+    val groupName: String,
+    val startTimestamp: Long,       // epoch millis
+    val totalDurationSeconds: Long
+)
+@Entity
+data class PracticeSessionTask(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sessionId: Long,            // FK → PracticeSession
+    val taskId: Int,
+    val taskName: String,
+    val orderIndex: Int,
+    val timeSpentSeconds: Long,
+    val bpmUsed: Int                // BPM active when task ended
+)
+9. Full Data Persistence Summary
+Data
+Storage
+Key / Table
+Practice tasks
+Room DB
+PracticeTask
+Practice groups
+Room DB
+PracticeGroup
+Session history
+Room DB
+PracticeSession + PracticeSessionTask
+Last used task IDs
+SharedPreferences
+last_used_task_ids
+Per-task BPM memory
+SharedPreferences
+bpm_task_{taskId}
+Per-task beat accent/mute state
+SharedPreferences (optional)
+beat_state_{taskId}_{beatIndex}
+Note on beat accent/mute state (optional enhancement):
+If implemented, saves the accent/mute pattern per task so that e.g. beat 1 Accented + beat 3 Muted is automatically restored each time that task is loaded during any future session.
+10. Non-Functional Requirements
+Metronome timing must be accurate – compensate for coroutine drift using SystemClock.elapsedRealtime()
+Practice screen must stay awake – use WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+App must work fully offline – no network calls
+Portrait orientation only – lock in AndroidManifest.xml
+Minimum SDK: API 26 (Android 8.0)
+Material Design 3 with a dark theme suitable for dim practice environments
+All Room operations must run on background threads (use Dispatchers.IO)
+ViewModel must survive configuration changes (screen rotation)
+11. Required Assets
+app/src/main/assets/tasks.json – seed task list
+app/src/main/assets/images/ – task reference images (.png recommended)
+app/src/main/res/raw/click_normal.wav – standard metronome click
+app/src/main/res/raw/click_accent.wav – accented metronome click (louder / higher pitch)
+12. Screen & Route Map
+Screen
+Route
+Nav Entry Point
+Back Behaviour
+Task Library
+home
+Bottom bar – Home tab
+App exit
+Group Review
+group_review
+FAB on Home
+Back to Home
+Practice
+practice/{groupId}
+Start Practice button
+End button or hardware back → confirmation
+Summary
+summary/{sessionId}
+End button in Practice
+Done clears stack → Home
+Groups
+groups
+Bottom bar – Groups tab
+Bottom bar
+History
+history
+Bottom bar – History tab
+Bottom bar
+Settings
+settings
+Bottom bar – Settings tab
+Bottom bar
+— End of Specification —

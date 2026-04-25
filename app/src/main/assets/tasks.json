@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "name": "Chromatics",
+    "description": "Chromatic exercises",
+    "category": "Technique",
+    "isParent": true,
+    "parentId": null,
+    "imageFile": null
+  },
+  {
+    "id": 2,
+    "name": "2nd Finger Position",
+    "description": "C Major Scale starting with 2nd Finger",
+    "category": "Technique",
+    "isParent": true,
+    "parentId": null,
+    "imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 3,
+    "name": "Triplets",
+    "description": "Triplets in 2nd Finger Position",
+    "category": "Technique",
+    "isParent": false,
+    "parentId": 2,
+    "imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 4,
+    "name": "Quadraplets",
+    "description": "Quadraplets in 2nd Finger Position",
+    "category": "Technique",
+    "isParent": false,
+    "parentId": 2,
+    "imageFile": "c_major_scale.png"
+  },
+  {
+    "id": 5,
+    "name": "Chords",
+    "description": "Chords Practice",
+    "category": "Chords",
+    "isParent": true,
+    "parentId": null,
+    "imageFile": "chords.png"
+  },
+  {
+    "id": 6,
+    "name": "G Major Open",
+    "description": "G Major Open Chord",
+    "category": "Chords",
+    "isParent": false,
+    "parentId": 5,
+    "imageFile": "chords.png"
+  }
+]
