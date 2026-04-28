@@ -57,6 +57,7 @@ class TunerViewModel(application: Application) : AndroidViewModel(application) {
     private var stableCount    = 0
     private var lastStringIdx  = -1
 
+    @android.annotation.SuppressLint("MissingPermission")
     fun startListening() {
         if (isRunning) return
         isRunning = true
