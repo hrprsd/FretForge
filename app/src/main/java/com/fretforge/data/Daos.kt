@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -17,6 +18,15 @@ interface PracticeTaskDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(tasks: List<PracticeTask>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTask(task: PracticeTask): Long
+
+    @Update
+    suspend fun updateTask(task: PracticeTask)
+
+    @Query("DELETE FROM practice_tasks WHERE id = :id")
+    suspend fun deleteTaskById(id: Int)
 
     @Query("SELECT COUNT(id) FROM practice_tasks")
     suspend fun count(): Int
@@ -59,4 +69,16 @@ interface PracticeSessionDao {
         deleteSession(sessionId)
         deleteSessionTasks(sessionId)
     }
+}
+
+@Dao
+interface SongDao {
+    @Query("SELECT * FROM songs ORDER BY id DESC")
+    fun getAllSongs(): Flow<List<Song>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSong(song: Song): Long
+
+    @Query("DELETE FROM songs WHERE id = :id")
+    suspend fun deleteSong(id: Long)
 }

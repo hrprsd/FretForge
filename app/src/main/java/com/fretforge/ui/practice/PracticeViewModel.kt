@@ -6,7 +6,7 @@ import android.media.SoundPool
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.fretforge.R
+import com.hrprsd.fretforge.R
 import com.fretforge.data.AppDatabase
 import com.fretforge.data.PracticeSession
 import com.fretforge.data.PracticeSessionTask

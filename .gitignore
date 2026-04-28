@@ -15,3 +15,8 @@
 local.properties
 **/build/
 dump.xml
+
+# Keystore and Keys
+*.keystore
+*.pem
+public_key_info.txt

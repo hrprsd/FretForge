@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.fretforge"
+    namespace = "com.hrprsd.fretforge"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.fretforge"
+        applicationId = "com.hrprsd.fretforge"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -21,9 +21,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "fretforge"
+            keyAlias = "fretforge"
+            keyPassword = "fretforge"
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

@@ -39,3 +39,11 @@ data class PracticeSessionTask(
     val timeSpentSeconds: Long,
     val bpmUsed: Int
 )
+
+@Entity(tableName = "songs")
+data class Song(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val imagePaths: String = "",   // comma-separated internal file paths
+    val youtubeUrl: String = ""
+)

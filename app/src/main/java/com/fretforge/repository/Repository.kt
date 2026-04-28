@@ -16,6 +16,9 @@ class TaskRepository(private val dao: PracticeTaskDao) {
     
     suspend fun countTasks(): Int = dao.count()
     suspend fun insertTasks(tasks: List<PracticeTask>) = dao.insertAll(tasks)
+    suspend fun insertTask(task: PracticeTask): Long = dao.insertTask(task)
+    suspend fun updateTask(task: PracticeTask) = dao.updateTask(task)
+    suspend fun deleteTask(id: Int) = dao.deleteTaskById(id)
 }
 
 class GroupRepository(private val dao: PracticeGroupDao) {
