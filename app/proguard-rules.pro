@@ -23,3 +23,8 @@
 -keepclassmembernames class kotlinx.** {
     volatile <fields>;
 }
+
+# Keep ViewModel constructors for Compose viewModel() reflection
+-keep public class * extends androidx.lifecycle.ViewModel {
+    public <init>(...);
+}
