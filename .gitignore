@@ -15,6 +15,7 @@
 local.properties
 **/build/
 dump.xml
+GuitarPracticeApp_Prompt.docx
 
 # Keystore and Keys
 *.keystore
