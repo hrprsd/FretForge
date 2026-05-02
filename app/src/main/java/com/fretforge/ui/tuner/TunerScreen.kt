@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -98,7 +99,7 @@ fun TunerScreen(viewModel: TunerViewModel = viewModel()) {
 
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // ── Top: Tuning meter ─────────────────────────────────────
-            TuningMeter(
+            CircularTunerMeter(
                 modifier     = Modifier.fillMaxWidth().weight(0.38f),
                 state        = state
             )
@@ -112,26 +113,26 @@ fun TunerScreen(viewModel: TunerViewModel = viewModel()) {
     }
 }
 
-// ── Tuning Meter ─────────────────────────────────────────────────────────────
+// ── Circular Tuning Meter ────────────────────────────────────────────────────
 @Composable
-private fun TuningMeter(modifier: Modifier, state: TunerState) {
+private fun CircularTunerMeter(modifier: Modifier, state: TunerState) {
     val centsTarget = if (state.activeString != null) state.centsOff.coerceIn(-50f, 50f) else 0f
     val animatedCents by animateFloatAsState(
         targetValue   = centsTarget,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
-        label         = "tuningBar"
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label         = "tuningDial"
     )
     val indicatorColor by animateColorAsState(
         targetValue = when (state.status) {
             TuneStatus.IN_TUNE   -> Color(0xFF4CAF82)
             TuneStatus.SHARP     -> ErrorRed
             TuneStatus.FLAT      -> ElectricBlue
-            TuneStatus.LISTENING -> Color.White.copy(alpha = 0.6f)
+            TuneStatus.LISTENING -> Color.White.copy(alpha = 0.3f)
         },
         label = "indicatorColor"
     )
 
-    Box(modifier = modifier.background(Color(0xFF0D0D14))) {
+    Box(modifier = modifier.background(Color(0xFF0D0D14)), contentAlignment = Alignment.Center) {
         // Subtle dot-grid background
         Canvas(modifier = Modifier.fillMaxSize()) {
             val gridPx = 28.dp.toPx()
@@ -141,137 +142,138 @@ private fun TuningMeter(modifier: Modifier, state: TunerState) {
             while (y <= size.height) { drawLine(Color.White.copy(0.05f), Offset(0f, y), Offset(size.width, y), 1f); y += gridPx }
         }
 
-        // ── Tuning bar track ─────────────────────────────────────────────
-        val fraction = animatedCents / 50f          // -1 .. +1
-        val trackPaddingDp = 32.dp
-        val barHeightDp    = 10.dp
-        val barWidthDp     = 56.dp
-        val thumbWidthDp   = 18.dp
+        // Circular Dial Canvas
+        Canvas(modifier = Modifier.size(260.dp)) {
+            val center = Offset(size.width / 2, size.height / 2)
+            val radius = size.width / 2 - 20.dp.toPx()
+            
+            // Background Arc (semi-circle)
+            drawArc(
+                color = Color.White.copy(alpha = 0.05f),
+                startAngle = 135f,
+                sweepAngle = 270f,
+                useCenter = false,
+                style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round)
+            )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = trackPaddingDp)
-                .height(barHeightDp)
-                .align(Alignment.Center)
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            ElectricBlue.copy(alpha = 0.35f),
-                            Color(0xFF4CAF82).copy(alpha = 0.15f),
-                            ErrorRed.copy(alpha = 0.35f)
-                        )
-                    )
+            // Tick marks
+            val angles = listOf(135f, 135f + 67.5f, 270f, 270f + 67.5f, 405f)
+            angles.forEach { angle ->
+                val angleRad = angle * (PI / 180f)
+                val innerRadius = radius - 16.dp.toPx()
+                val outerRadius = radius + 10.dp.toPx()
+                val start = Offset(
+                    center.x + (innerRadius * kotlin.math.cos(angleRad)).toFloat(),
+                    center.y + (innerRadius * kotlin.math.sin(angleRad)).toFloat()
                 )
-        )
+                val end = Offset(
+                    center.x + (outerRadius * kotlin.math.cos(angleRad)).toFloat(),
+                    center.y + (outerRadius * kotlin.math.sin(angleRad)).toFloat()
+                )
+                val isCenter = angle == 270f
+                drawLine(
+                    color = if (isCenter) Color.White.copy(0.5f) else Color.White.copy(0.2f),
+                    start = start,
+                    end = end,
+                    strokeWidth = if (isCenter) 4.dp.toPx() else 2.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
 
-        // Centre marker line (always visible)
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(barHeightDp + 12.dp)
-                .align(Alignment.Center)
-                .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.25f))
-        )
+            // Indicator Arc
+            if (state.activeString != null) {
+                // fraction from -1 to 1 mapped to angles 135 to 405
+                // 0 cents = 270 degrees
+                val fraction = animatedCents / 50f
+                val sweepAngle = fraction * 135f
+                
+                // Draw colored arc from center to indicator
+                val startA = 270f
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        colors = listOf(ElectricBlue, Color(0xFF4CAF82), ErrorRed),
+                        center = center
+                    ),
+                    startAngle = startA,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round),
+                    alpha = 0.8f
+                )
 
-        // Sliding indicator bar
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = trackPaddingDp)
-                .align(Alignment.Center)
-        ) {
-            val halfTrack = (maxWidth - barWidthDp) / 2
-            val offsetX   = halfTrack * fraction
-
-            Box(
-                modifier = Modifier
-                    .width(barWidthDp)
-                    .height(barHeightDp)
-                    .align(Alignment.Center)
-                    .offset(x = offsetX)
-                    .shadow(if (state.activeString != null) 8.dp else 0.dp, RoundedCornerShape(50),
-                        ambientColor = indicatorColor, spotColor = indicatorColor)
-                    .clip(RoundedCornerShape(50))
-                    .background(indicatorColor)
-            )
-
-            // Thumb pip in the centre of the bar
-            Box(
-                modifier = Modifier
-                    .width(thumbWidthDp)
-                    .height(barHeightDp + 6.dp)
-                    .align(Alignment.Center)
-                    .offset(x = offsetX)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.9f))
-            )
-        }
-
-        // Tick marks at -50 / -25 / 0 / +25 / +50 cents
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = trackPaddingDp - 4.dp)
-                .height(28.dp)
-                .align(Alignment.Center)
-                .offset(y = 22.dp)
-        ) {
-            val positions = listOf(0f, 0.25f, 0.5f, 0.75f, 1f)
-            positions.forEach { p ->
-                val tx = p * size.width
-                drawLine(Color.White.copy(0.20f), Offset(tx, 0f), Offset(tx, 14f), 1.5f)
+                // Draw needle dot
+                val needleAngleRad = (270f + sweepAngle) * (PI / 180f)
+                val needlePos = Offset(
+                    center.x + (radius * kotlin.math.cos(needleAngleRad)).toFloat(),
+                    center.y + (radius * kotlin.math.sin(needleAngleRad)).toFloat()
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 12.dp.toPx(),
+                    center = needlePos
+                )
+                drawCircle(
+                    color = indicatorColor,
+                    radius = 8.dp.toPx(),
+                    center = needlePos
+                )
             }
         }
 
         // ♭ / ♯ labels
-        Text("♭", modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp),
-            color = ElectricBlue.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light))
-        Text("♯", modifier = Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
-            color = ErrorRed.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light))
+        Box(modifier = Modifier.size(260.dp)) {
+            Text("♭", modifier = Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 24.dp),
+                color = ElectricBlue.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold))
+            Text("♯", modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp),
+                color = ErrorRed.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold))
+        }
 
-        // Status info at bottom of meter
-        Column(
-            modifier            = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        // Center Note Display
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (state.activeString != null) {
+                // Display just the letter (e.g., 'E' instead of 'E2')
+                val noteLetter = state.activeString.label.first().toString()
+                
                 Text(
-                    state.activeString.label,
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    text = noteLetter,
+                    style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        color      = indicatorColor
+                        fontSize = 100.sp,
+                        color = indicatorColor
+                    ),
+                    modifier = Modifier.shadow(
+                        elevation = if (state.status == TuneStatus.IN_TUNE) 24.dp else 0.dp,
+                        shape = CircleShape,
+                        ambientColor = indicatorColor,
+                        spotColor = indicatorColor
                     )
                 )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
                 val statusText = when (state.status) {
-                    TuneStatus.IN_TUNE   -> "✓  In Tune"
-                    TuneStatus.SHARP     -> "▲ Tune Down  (${ "%.0f".format(state.centsOff)} ¢)"
-                    TuneStatus.FLAT      -> "▼ Tune Up  (${ "%.0f".format(state.centsOff)} ¢)"
+                    TuneStatus.IN_TUNE   -> "✓ In Tune"
+                    TuneStatus.SHARP     -> "Tune Down (${ "%.0f".format(state.centsOff)}¢)"
+                    TuneStatus.FLAT      -> "Tune Up (${ "%.0f".format(state.centsOff)}¢)"
                     TuneStatus.LISTENING -> "${ "%.1f".format(state.detectedHz)} Hz"
                 }
-                Text(statusText, color = indicatorColor.copy(0.85f),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                Text(statusText, color = indicatorColor.copy(0.9f),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
             } else {
+                Text(
+                    text = "-",
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 100.sp,
+                        color = Color.White.copy(0.1f)
+                    )
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 Text("Play a string to tune", color = Color.White.copy(0.3f),
                     style = MaterialTheme.typography.bodyMedium)
             }
-        }
-
-        // Note name floating above the bar
-        if (state.activeString != null) {
-            Text(
-                state.activeString.note,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = Color.White.copy(0.35f),
-                    fontFamily = FontFamily.Monospace
-                )
-            )
         }
     }
 }
