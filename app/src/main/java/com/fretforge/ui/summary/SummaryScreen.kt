@@ -337,7 +337,7 @@ fun shareSessionAsImage(
     }
     FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
-    val uri = FileProvider.getUriForFile(context, "com.fretforge.fileprovider", file)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
     val intent = Intent(Intent.ACTION_SEND).apply {
         type    = "image/png"
